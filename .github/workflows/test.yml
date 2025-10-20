@@ -1,8 +1,10 @@
 name: Test Project
 
 on:
-  push:
-    branches: [ main ]
+  # Вимкнено тимчасово
+  # push:
+  #   branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   test:

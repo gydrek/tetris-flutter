@@ -1,9 +1,8 @@
 name: Build iOS
 
 on:
-  # Вимкнено тимчасово через помилки
-  # push:
-  #   branches: [ main ]
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -16,27 +15,30 @@ jobs:
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: 'stable'
+        flutter-version: '3.35.6'
         channel: 'stable'
+        cache: true
     
     - name: Install dependencies
       run: flutter pub get
     
     - name: Build iOS без підпису
       run: |
-        flutter build ios --release --no-codesign
+        flutter build ios --release --no-codesign --verbose
     
-    - name: Create simple IPA
+    - name: List build output
+      run: |
+        ls -la build/ios/iphoneos/
+    
+    - name: Create IPA
       run: |
         mkdir -p build/ios/ipa
         cd build/ios/iphoneos
-        mkdir -p Payload
-        cp -R Runner.app Payload/
-        cd ../../../
-        zip -r build/ios/ipa/tetris-flutter.ipa build/ios/iphoneos/Payload
+        zip -r ../ipa/tetris-flutter-ios.ipa Runner.app
     
     - name: Upload IPA
       uses: actions/upload-artifact@v4
       with:
         name: tetris-flutter-ios
-        path: build/ios/ipa/tetris-flutter.ipa
+        path: build/ios/ipa/tetris-flutter-ios.ipa
+        retention-days: 30
