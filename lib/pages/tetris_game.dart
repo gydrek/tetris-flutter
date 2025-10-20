@@ -34,7 +34,7 @@ class NextBlockPreviewWidget extends StatelessWidget {
                 height: cellSize,
                 decoration: BoxDecoration(
                   color: filled ? nextBlock.color : Colors.transparent,
-                  border: filled ? Border.all(color: Theme.of(context).colorScheme.surface.withOpacity(0.3)) : null,
+                  border: filled ? Border.all(color: Theme.of(context).colorScheme.surface.withOpacity(0.4)) : null,
                   borderRadius: BorderRadius.circular(3),
                 ),
               );
@@ -65,11 +65,16 @@ class _TetrisBoardState extends State<TetrisBoard> {
     super.initState();
     _loadBestScore();
     widget.tetrisGame.onUpdateUI = () {
-      // Перевіряємо чи поточний рахунок перевищує рекорд
-      if (widget.tetrisGame.score > bestScore) {
-        bestScore = widget.tetrisGame.score;
-      }
-      setState(() {});
+      // Робимо асинхронний виклик setState щоб уникнути помилки під час build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          // Перевіряємо чи поточний рахунок перевищує рекорд
+          if (widget.tetrisGame.score > bestScore) {
+            bestScore = widget.tetrisGame.score;
+          }
+          setState(() {});
+        }
+      });
     };
   }
 
@@ -285,6 +290,26 @@ class TetrisGame extends FlameGame {
   @override
   void update(double dt) {
     if (!isPaused && !isGameOver) {
+      // Обробка затримки очищення рядків
+      if (isClearingLines) {
+        _lineClearTimer += dt;
+        if (_lineClearTimer >= lineClearDelay) {
+          // Завершуємо процес очищення і спавним новий блок
+          _finishLineClear();
+        }
+        return; // Не обробляємо падіння під час очищення
+      }
+      
+      // Обробка затримки фіксації блоку
+      if (isBlockLocking) {
+        _blockLockTimer += dt;
+        if (_blockLockTimer >= blockLockDelay) {
+          // Завершуємо процес фіксації і спавним новий блок
+          _finishBlockLock();
+        }
+        return; // Не обробляємо падіння під час фіксації
+      }
+      
       _fallTimer += dt;
       if (_fallTimer >= fallDelay) {
         moveDown();
@@ -305,23 +330,37 @@ class TetrisGame extends FlameGame {
   int score = 0;
   bool isGameOver = false;
   bool isPaused = false;
+  bool isClearingLines = false; // Новий стан для процесу очищення рядків
+  bool isBlockLocking = false; // Новий стан для затримки фіксації блоку
+  double _lineClearTimer = 0;
+  double _blockLockTimer = 0;
+  final double lineClearDelay = 0.05; // Затримка в секундах для очищення рядків
+  final double blockLockDelay = 0.05; // Затримка в секундах для фіксації блоку
   VoidCallback? onUpdateUI;
   VoidCallback? onGameOver;
 
+  // Безпечний асинхронний виклик оновлення UI
+  void _safeUpdateUI() {
+    if (onUpdateUI != null) {
+      // Використовуємо Future.microtask для асинхронного виклику
+      Future.microtask(() => onUpdateUI!());
+    }
+  }
+
 
   void moveLeft() {
-    if (isPaused) return;
+    if (isPaused || isClearingLines || isBlockLocking) return;
     if (canMove(-1, 0)) {
       currentBlock.x -= 1;
-      if (onUpdateUI != null) onUpdateUI!();
+      _safeUpdateUI();
     }
   }
 
   void moveRight() {
-    if (isPaused) return;
+    if (isPaused || isClearingLines || isBlockLocking) return;
     if (canMove(1, 0)) {
       currentBlock.x += 1;
-      if (onUpdateUI != null) onUpdateUI!();
+      _safeUpdateUI();
     }
   }
 
@@ -341,45 +380,86 @@ class TetrisGame extends FlameGame {
   }
 
   void moveDown() {
-    if (isPaused || isGameOver) return;
+    if (isPaused || isGameOver || isClearingLines || isBlockLocking) return;
     if (canMove(0, 1)) {
       currentBlock.y += 1;
     } else {
       bakeBlock();
-      clearLines();
-      // Перевірква кінця гри після фіксації фігури та очищення ліній
-          if (field[0].any((cell) => cell != 0)) {
-            isGameOver = true;
-            if (onGameOver != null) onGameOver!();
-            return;
-          }
-      currentBlock = nextBlock;
-      nextBlock = getRandomTetromino();
+      int linesCleared = clearLines();
+      
+      // Якщо рядки були очищені, запускаємо затримку очищення
+      if (linesCleared > 0) {
+        isClearingLines = true;
+        _lineClearTimer = 0;
+        return; // Не спавним новий блок відразу
+      }
+      
+      // Якщо рядки не очищалися, запускаємо затримку фіксації
+      isBlockLocking = true;
+      _blockLockTimer = 0;
+      return; // Не спавним новий блок відразу
     }
-    if (onUpdateUI != null) onUpdateUI!();
+    _safeUpdateUI();
   }
 
   void togglePause() {
     isPaused = !isPaused;
   }
 
+  // Завершення процесу очищення рядків та спавн нового блоку
+  void _finishLineClear() {
+    isClearingLines = false;
+    _lineClearTimer = 0;
+    
+    // Перевірка кінця гри
+    if (field[0].any((cell) => cell != 0)) {
+      isGameOver = true;
+      if (onGameOver != null) onGameOver!();
+      return;
+    }
+    
+    currentBlock = nextBlock;
+    nextBlock = getRandomTetromino();
+    _safeUpdateUI();
+  }
+
+  // Завершення процесу фіксації блоку та спавн нового блоку
+  void _finishBlockLock() {
+    isBlockLocking = false;
+    _blockLockTimer = 0;
+    
+    // Перевірка кінця гри
+    if (field[0].any((cell) => cell != 0)) {
+      isGameOver = true;
+      if (onGameOver != null) onGameOver!();
+      return;
+    }
+    
+    currentBlock = nextBlock;
+    nextBlock = getRandomTetromino();
+    _safeUpdateUI();
+  }
+
   // Моментальне падіння фігури (hard drop)
   void hardDrop() {
-    if (isPaused) return;
+    if (isPaused || isClearingLines || isBlockLocking) return;
     while (canMove(0, 1)) {
       currentBlock.y += 1;
     }
     bakeBlock();
-    clearLines();
-    // Перевірква кінця гри після фіксації фігури та очищення ліній
-        if (field[0].any((cell) => cell != 0)) {
-          isGameOver = true;
-          if (onGameOver != null) onGameOver!();
-          return;
-        }
-  currentBlock = nextBlock;
-    nextBlock = getRandomTetromino();
-    if (onUpdateUI != null) onUpdateUI!();
+    int linesCleared = clearLines();
+    
+    // Якщо рядки були очищені, запускаємо затримку очищення
+    if (linesCleared > 0) {
+      isClearingLines = true;
+      _lineClearTimer = 0;
+      return; // Не спавним новий блок відразу
+    }
+    
+    // Якщо рядки не очищалися, запускаємо затримку фіксації
+    isBlockLocking = true;
+    _blockLockTimer = 0;
+    _safeUpdateUI();
   }
 
   int getGhostY() {
@@ -419,10 +499,27 @@ class TetrisGame extends FlameGame {
 
   // Обертає поточну фігуру, якщо це можливо
   void rotateCurrentBlock() {
-    if (isPaused) return;
+    if (isPaused || isClearingLines || isBlockLocking) return;
+    
     List<List<int>> rotated = rotateMatrix(currentBlock.shape);
     int originalX = currentBlock.x;
-    List<int> kicks = [0, 1, -1, 2, -2];
+    int originalY = currentBlock.y;
+    
+    // Перевіряємо і виправляємо позицію якщо фігура виходить за верхній край
+    int topOffset = _getTopOffset(rotated, originalX, originalY);
+    if (topOffset > 0) {
+      currentBlock.y = originalY + topOffset;
+    }
+    
+    // Спочатку пробуємо обернути на місці (з можливим зміщенням вниз)
+    if (canMove(0, 0, rotated)) {
+      currentBlock.shape = rotated;
+      return;
+    }
+    
+    // Якщо не можемо обернути на місці, використовуємо wall kick
+    List<int> kicks = _getWallKicks(currentBlock.shape, rotated);
+    
     for (int dx in kicks) {
       currentBlock.x = originalX + dx;
       if (canMove(0, 0, rotated)) {
@@ -430,7 +527,82 @@ class TetrisGame extends FlameGame {
         return;
       }
     }
-  currentBlock.x = originalX; // Повертаємо назад, якщо не вдалося
+    
+    // Якщо горизонтальні зміщення не працюють, пробуємо додаткові вертикальні
+    currentBlock.x = originalX; // Повертаємо X назад
+    for (int dy in [1, 2]) { // Тільки вниз, оскільки вгору вже перевірили
+      currentBlock.y = originalY + topOffset + dy;
+      if (canMove(0, 0, rotated)) {
+        currentBlock.shape = rotated;
+        return;
+      }
+    }
+    
+    // Повертаємо позицію назад, якщо не вдалося
+    currentBlock.x = originalX;
+    currentBlock.y = originalY;
+  }
+
+  // Обчислюємо наскільки потрібно зсунути фігуру вниз, щоб вона не виходила за верхній край
+  int _getTopOffset(List<List<int>> shape, int x, int y) {
+    int minY = rows; // Початкове значення більше за можливе
+    
+    for (int shapeY = 0; shapeY < shape.length; shapeY++) {
+      for (int shapeX = 0; shapeX < shape[shapeY].length; shapeX++) {
+        if (shape[shapeY][shapeX] != 0) {
+          int fieldY = y + shapeY;
+          if (fieldY < minY) {
+            minY = fieldY;
+          }
+        }
+      }
+    }
+    
+    // Якщо мінімальний Y менше 0, потрібно зсунути вниз
+    return minY < 0 ? -minY : 0;
+  }
+
+  // Отримуємо wall kicks залежно від типу фігури
+  List<int> _getWallKicks(List<List<int>> originalShape, List<List<int>> rotatedShape) {
+    // Перевіряємо чи це лінійна фігура (I-tetromino)
+    bool isLinePiece = _isLinePiece(originalShape);
+    
+    if (isLinePiece) {
+      // Для лінійної фігури використовуємо більші зміщення
+      return [1, -1, 2, -2];
+    } else {
+      // Для інших фігур використовуємо мінімальні зміщення
+      return [1, -1];
+    }
+  }
+
+  // Перевіряємо чи це лінійна фігура (I-tetromino)
+  bool _isLinePiece(List<List<int>> shape) {
+    int blockCount = 0;
+    for (int y = 0; y < shape.length; y++) {
+      for (int x = 0; x < shape[y].length; x++) {
+        if (shape[y][x] != 0) blockCount++;
+      }
+    }
+    
+    // Лінійна фігура має 4 блоки в ряд
+    if (blockCount != 4) return false;
+    
+    // Перевіряємо чи всі блоки в одному рядку або одній колонці
+    List<int> rows = [];
+    List<int> cols = [];
+    
+    for (int y = 0; y < shape.length; y++) {
+      for (int x = 0; x < shape[y].length; x++) {
+        if (shape[y][x] != 0) {
+          rows.add(y);
+          cols.add(x);
+        }
+      }
+    }
+    
+    // Всі в одному рядку або всі в одній колонці
+    return (rows.toSet().length == 1) || (cols.toSet().length == 1);
   }
 
   final List<Map<String, dynamic>> tetrominoTypes = [
@@ -530,7 +702,7 @@ class TetrisGame extends FlameGame {
   field = List.generate(rows, (_) => List.filled(cols, 0));
   currentBlock = getRandomTetromino();
   nextBlock = getRandomTetromino();
-  if (onUpdateUI != null) onUpdateUI!();
+  _safeUpdateUI();
   }
 
   int getMinX(List<List<int>> shape) {
@@ -565,7 +737,7 @@ class TetrisGame extends FlameGame {
     }
   }
 
-  void clearLines() {
+  int clearLines() {
     int linesCleared = 0;
       for (int y = field.length - 1; y >= 0; y--) {
         if (field[y].every((cell) => cell != 0)) {
@@ -577,7 +749,8 @@ class TetrisGame extends FlameGame {
       }
   score += linesCleared * 100;
   updateFallDelay();
-  if (onUpdateUI != null) onUpdateUI!();
+  _safeUpdateUI();
+  return linesCleared;
   }
 
   @override
@@ -628,49 +801,53 @@ class TetrisGame extends FlameGame {
     }
 
 
-    // Малюємо поточну фігуру
-    for (int y = 0; y < currentBlock.shape.length; y++) {
-      for (int x = 0; x < currentBlock.shape[y].length; x++) {
-        if (currentBlock.shape[y][x] != 0) {
-          final rect = Rect.fromLTWH(
-            offsetX + (currentBlock.x + x) * cellSize,
-            offsetY + (currentBlock.y + y) * cellSize,
-            cellSize,
-            cellSize,
-          );
-          final rrect = RRect.fromRectAndRadius(rect, Radius.circular(3));
-          canvas.drawRRect(rrect, Paint()..color = currentBlock.color);
-          canvas.drawRRect(
-            rrect,
-            Paint()
-              ..color = arenaColor.withOpacity(0.4)
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 1,
-          );
+    // Малюємо поточну фігуру (тільки якщо не очищаємо рядки і не фіксуємо блок)
+    if (!isClearingLines && !isBlockLocking) {
+      for (int y = 0; y < currentBlock.shape.length; y++) {
+        for (int x = 0; x < currentBlock.shape[y].length; x++) {
+          if (currentBlock.shape[y][x] != 0) {
+            final rect = Rect.fromLTWH(
+              offsetX + (currentBlock.x + x) * cellSize,
+              offsetY + (currentBlock.y + y) * cellSize,
+              cellSize,
+              cellSize,
+            );
+            final rrect = RRect.fromRectAndRadius(rect, Radius.circular(3));
+            canvas.drawRRect(rrect, Paint()..color = currentBlock.color);
+            canvas.drawRRect(
+              rrect,
+              Paint()
+                ..color = arenaColor.withOpacity(0.4)
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 1,
+            );
+          }
         }
       }
     }
 
-    // Малюємо "привид" фігури
-    int ghostY = getGhostY();
-    for (int y = 0; y < currentBlock.shape.length; y++) {
-      for (int x = 0; x < currentBlock.shape[y].length; x++) {
-        if (currentBlock.shape[y][x] != 0) {
-          final rect = Rect.fromLTWH(
-            offsetX + (currentBlock.x + x) * cellSize,
-            offsetY + (ghostY + y) * cellSize,
-            cellSize,
-            cellSize,
-          );
-          final rrect = RRect.fromRectAndRadius(rect, Radius.circular(3));
-          canvas.drawRRect(rrect, Paint()..color = currentBlock.color.withOpacity(0.3));
-          canvas.drawRRect(
-            rrect,
-            Paint()
-              ..color = arenaColor.withOpacity(0.4)
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 1,
-          );
+    // Малюємо "привид" фігури (тільки якщо не очищаємо рядки і не фіксуємо блок)
+    if (!isClearingLines && !isBlockLocking) {
+      int ghostY = getGhostY();
+      for (int y = 0; y < currentBlock.shape.length; y++) {
+        for (int x = 0; x < currentBlock.shape[y].length; x++) {
+          if (currentBlock.shape[y][x] != 0) {
+            final rect = Rect.fromLTWH(
+              offsetX + (currentBlock.x + x) * cellSize,
+              offsetY + (ghostY + y) * cellSize,
+              cellSize,
+              cellSize,
+            );
+            final rrect = RRect.fromRectAndRadius(rect, Radius.circular(3));
+            canvas.drawRRect(rrect, Paint()..color = currentBlock.color.withOpacity(0.3));
+            canvas.drawRRect(
+              rrect,
+              Paint()
+                ..color = arenaColor.withOpacity(0.4)
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 1,
+            );
+          }
         }
       }
     }
@@ -688,10 +865,9 @@ class TetrisGame extends FlameGame {
           text: currentLocale.value.languageCode == 'en' ? 'Pause' : 'Пауза',
           style: TextStyle(
             color: Colors.white,
-            fontSize: 48,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Bungee',
-            shadows: [Shadow(blurRadius: 8, color: Colors.black)],
+            fontSize: 40,
+            fontFamily: 'RubikMonoOne',
+            shadows: [Shadow(blurRadius: 10, color: Colors.black)],
           ),
         ),
         textAlign: TextAlign.center,

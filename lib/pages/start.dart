@@ -38,7 +38,7 @@ class Start extends StatelessWidget {
               onPressed: () {
                 Navigator.pushReplacementNamed(context, '/score');
               },
-              child: Text(currentLocale.value.languageCode == 'en' ? 'Score' : 'Результати', style: TextStyle(
+              child: Text(currentLocale.value.languageCode == 'en' ? 'Scoreboard' : 'Таблиця рекордів', style: TextStyle(
                 fontFamily: 'PressStart2P',
                 fontWeight: FontWeight.w800,
                 fontSize: 15,

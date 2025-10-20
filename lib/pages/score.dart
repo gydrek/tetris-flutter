@@ -24,8 +24,20 @@ Future<int> getBestScore() async {
   return scores.reduce((a, b) => a > b ? a : b);
 }
 
-class Score extends StatelessWidget {
+// Функція для очищення всіх результатів
+Future<void> clearAllScores() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.remove('scores');
+}
+
+class Score extends StatefulWidget {
   const Score({super.key});
+
+  @override
+  State<Score> createState() => _ScoreState();
+}
+
+class _ScoreState extends State<Score> {
 
   Widget _buildScoreItem(BuildContext context, List<int> scores, int index, int? lastScore) {
     final isLast = lastScore != null && scores[index] == lastScore;
@@ -69,11 +81,6 @@ class Score extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(currentLocale.value.languageCode == 'en' ? 'Score:' : 'Рахунок:', style: TextStyle(
-                  fontFamily: 'RubikMonoOne',
-                  fontSize: 40,
-                  color: Theme.of(context).colorScheme.primary,
-                ),),
                 // Один стовпчик посередині (поточний варіант)
                 Container(
                   width: 300,
@@ -86,68 +93,144 @@ class Score extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      for (int i = 0; i < scores.length && i < 10; i++) ...[
-                        _buildScoreItem(context, scores, i, lastScore),
+                      // Перевіряємо чи список порожній
+                      if (scores.isEmpty) ...[
+                        Container(
+                          padding: EdgeInsets.symmetric(vertical: 40),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.emoji_events_outlined,
+                                size: 50,
+                                color: Theme.of(context).colorScheme.onPrimaryContainer.withOpacity(0.4),
+                              ),
+                              SizedBox(height: 15),
+                              Text(
+                                currentLocale.value.languageCode == 'en' ? 'Play to set your first record!' : 'Зіграйте щоб встановити перший рекорд!',
+                                style: TextStyle(
+                                  fontFamily: 'PressStart2P',
+                                  fontSize: 15,
+                                  color: Theme.of(context).colorScheme.onPrimaryContainer.withOpacity(0.5),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        // Показуємо рекорди якщо вони є
+                        for (int i = 0; i < scores.length && i < 10; i++) ...[
+                          _buildScoreItem(context, scores, i, lastScore),
+                        ],
                       ],
                     ],
                   ),
                 ),
-                
-                // Закоментований код з двома стовпчиками (можна повернути пізніше)
-                /*
-                Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  margin: EdgeInsets.all(20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      // Перший стовпчик (1-5 місця)
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            for (int i = 0; i < 5 && i < scores.length; i++) ...[
-                              _buildScoreItem(context, scores, i, lastScore),
-                            ],
-                          ],
+                // Кнопки в стовпчик
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pushReplacementNamed(context, '/game');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                      ),
+                      child: Text(currentLocale.value.languageCode == 'en' ? 'START' : 'СТАРТ', style: TextStyle(
+                        fontFamily: 'RubikMonoOne',
+                        fontSize: 25,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      ),),
+                    ),
+                    SizedBox(height: 15),
+                    // Кнопка "Назад до меню"
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pushReplacementNamed(context, '/');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                      ),
+                      child: Text(
+                        currentLocale.value.languageCode == 'en' ? 'Back to Menu' : 'Головне меню', 
+                        style: TextStyle(
+                          fontFamily: 'RubikMonoOne',
+                          fontSize: 20,
+                          color: Theme.of(context).colorScheme.onPrimary,
                         ),
                       ),
-                      // Розділювач
-                      Container(
-                        width: 2,
-                        height: 300,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer.withOpacity(0.3),
-                      ),
-                      // Другий стовпчик (6-10 місця)
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            for (int i = 5; i < 10 && i < scores.length; i++) ...[
-                              _buildScoreItem(context, scores, i, lastScore),
-                            ],
-                          ],
+                    ),
+                    SizedBox(height: 15),
+                    // Кнопка очищення (показуємо тільки якщо є результати)
+                    if (scores.isNotEmpty) ...[
+                      ElevatedButton(
+                        onPressed: () async {
+                          // Діалог підтвердження
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                              title: Text(
+                                currentLocale.value.languageCode == 'en' ? 'Clear all scores?' : 'Очистити всі результати?',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontFamily: 'RubikMonoOne',
+                                ),
+                              ),
+                              content: Text(
+                                currentLocale.value.languageCode == 'en' 
+                                  ? '...\nThis action cannot be undone!\n...' 
+                                  : '...\nЦю дію неможливо скасувати!\n...',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onPrimaryContainer.withOpacity(0.5),
+                                  fontFamily: 'RussoOne',
+                                  fontSize: 20,
+                                ),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: Text(
+                                    currentLocale.value.languageCode == 'en' ? 'Cancel' : 'Відмінити',
+                                    style: TextStyle(
+                                      fontFamily: 'RubikMonoOne',
+                                      fontSize: 15
+                                    ),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: Text(
+                                    currentLocale.value.languageCode == 'en' ? 'Confirm' : 'Підтвердити',
+                                    style: TextStyle(
+                                      color: Colors.red,
+                                      fontSize: 15,
+                                      fontFamily: 'RubikMonoOne',
+                                      ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                          
+                          if (confirmed == true) {
+                            await clearAllScores();
+                            setState(() {}); // Оновлюємо UI
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: Text(
+                          currentLocale.value.languageCode == 'en' ? 'Clear' : 'Очистити',
+                          style: TextStyle(fontFamily: 'RubikMonoOne', fontSize: 15),
                         ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
-                */
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushReplacementNamed(context, '/');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                  ),
-                  child: Text(currentLocale.value.languageCode == 'en' ? 'Back to Menu' : 'Назад до меню', style: TextStyle(
-                    fontFamily: 'RubikMonoOne',
-                    fontSize: 20,
-                    color: Theme.of(context).colorScheme.onPrimary,
-                  ),)),
               ],
             ),
           ),

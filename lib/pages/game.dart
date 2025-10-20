@@ -60,10 +60,10 @@ class _GameState extends State<Game> {
       builder: (context) {
         return AlertDialog(
           backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: Theme.of(context).colorScheme.onPrimaryContainer, width: 3),
-          ),
+          // shape: RoundedRectangleBorder(
+          //   borderRadius: BorderRadius.circular(20),
+          //   side: BorderSide(color: Theme.of(context).colorScheme.onPrimaryContainer, width: 3),
+          // ),
           title: Text(currentLocale.value.languageCode == 'en' ? 'Game Over' : 'Кінець гри',
             style: TextStyle(
               fontFamily: 'RubikMonoOne',
@@ -130,7 +130,7 @@ class _GameState extends State<Game> {
                     style: TextStyle(
                       fontFamily: 'RubikMonoOne',
                       fontSize: 15,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                 ),
@@ -144,11 +144,11 @@ class _GameState extends State<Game> {
                     Navigator.pushReplacementNamed(context, '/', arguments: tetrisGame!.score);
                   },
                   child: Text(
-                    currentLocale.value.languageCode == 'en' ? 'Back to Menu' : 'Назад до меню',
+                    currentLocale.value.languageCode == 'en' ? 'Back to Menu' : 'Головне меню',
                     style: TextStyle(
                       fontFamily: 'RubikMonoOne',
                       fontSize: 15,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                 ),

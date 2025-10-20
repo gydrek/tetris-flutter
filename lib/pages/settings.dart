@@ -133,7 +133,11 @@ class _SettingsPageState extends State<SettingsPage> {
                               currentLocale.value.languageCode == 'en' 
                                 ? 'Buttons saved successfully!' 
                                 : 'Кнопки успішно збережено!',
-                              style: TextStyle(fontFamily: 'RubikMonoOne', fontSize: 15),
+                              style: TextStyle(
+                                fontFamily: 'RubikMonoOne',
+                                fontSize: 15,
+                                color: Theme.of(context).colorScheme.onPrimary,
+                                ),
                             ),
                             duration: Duration(seconds: 2),
                             backgroundColor: Theme.of(context).colorScheme.primary,
@@ -146,7 +150,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.primary,
-                        padding: EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                        padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
