@@ -1,8 +1,10 @@
 name: Build iOS
 
 on:
-  push:
-    branches: [ main ]
+  # Вимкнено тимчасово через помилки
+  # push:
+  #   branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
